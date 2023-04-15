@@ -1,11 +1,12 @@
+import json
+import logging
+from typing import Dict
+
 import discord
 import openai
-import json
-from sentence_transformers import SentenceTransformer, util
-from typing import Dict
-from openai import ChatCompletion
 import torch
-import logging
+from openai import ChatCompletion
+from sentence_transformers import SentenceTransformer, util
 
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
@@ -31,7 +32,7 @@ with open('questions_answers.json', 'r') as file:
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-SIMILARITY_THRESHOLD = 0.91
+SIMILARITY_THRESHOLD = 0.90
 
 async def find_best_question_match(prompt, questions):
     prompt_embedding = model.encode(prompt)
@@ -46,8 +47,10 @@ async def find_best_question_match(prompt, questions):
         return None, 0
 
 async def get_more_context(question: str, answer: str, user_question: str, similarity: float) -> str:
-    print(f"Answer: {answer}")
-    print(f"Similarity: {similarity}")
+
+    logger.info(f"Answer: {answer}")
+    logger.info(f"Similarity: {similarity}")
+    
     if question and answer and similarity >= SIMILARITY_THRESHOLD:
         chat_messages = [
             {"role": "system", "content": "You are a helpful assistant. Please respond only in Bulgarian"},
@@ -71,23 +74,18 @@ async def get_more_context(question: str, answer: str, user_question: str, simil
     return response.choices[0].message['content'].strip()
 
 @client.event
-async def on_message_edit(before, after):
-    print(f"Before edit: {before.content}")
-    print(f"After edit: {after.content}")
-
-@client.event
 async def on_ready():
-    print(f'{client.user} has connected to Discord!')
+    logger.info(f'{client.user} has connected to Discord!')
 
 @client.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    print(f"Message content: {message.content}")
-    print(f"Message author: {message.author}")
-    print(f"Message channel: {message.channel}")
-    print(f"Message guild: {message.guild}")
+    logger.info(f"Message content: {message.content}")
+    logger.info(f"Message author: {message.author}")
+    logger.info(f"Message channel: {message.channel}")
+    logger.info(f"Message guild: {message.guild}")
 
 
     bot_member = message.guild.get_member(client.user.id) if message.guild else None
