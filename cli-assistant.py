@@ -20,26 +20,44 @@ handler = logging.FileHandler(filename='assistant.log', encoding='utf-8', mode='
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 logger.addHandler(handler)
 
-# Load embeddings and transformers
-with open('questions_answers.json', 'r') as file:
-    qa_embeddings = json.load(file)
+print("Loading embeddings and transformers...")
+with open('kb_simple.json', 'r') as file:
+    qa_data = json.load(file)
 
-model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+model = SentenceTransformer('sentence-transformers/LaBSE')
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-SIMILARITY_THRESHOLD = 0.90
+SIMILARITY_THRESHOLD = 0.75
 
-async def find_best_question_match(prompt, questions):
-    prompt_embedding = model.encode(prompt)
-    question_embeddings = model.encode(questions)
+print("Defining helper functions...")
 
-    cos_sim = torch.nn.CosineSimilarity(dim=1)(torch.tensor(prompt_embedding).unsqueeze(0), torch.tensor(question_embeddings))
-    max_sim, index = torch.max(cos_sim, dim=0)
+async def precompute_embeddings():
+    qa_embeddings = {}
+    for question, answer in qa_data.items():
+        question_embedding = model.encode(question, convert_to_tensor=True)
+        qa_embeddings[question] = {
+            'answer': answer,
+            'embedding': question_embedding
+        }
+    return qa_embeddings
 
-    if len(questions) > 0 and index.item() < len(questions):
-        return questions[index.item()], max_sim.item()
+print("Precomputing embeddings...")
+qa_embeddings = asyncio.run(precompute_embeddings())
+
+async def find_best_question_match(prompt, embeddings):
+    prompt_embedding = model.encode(prompt, convert_to_tensor=True)
+
+    questions = list(embeddings.keys())
+    question_embeddings = torch.stack([embeddings[q]['embedding'] for q in questions])
+
+    cos_sim = util.pytorch_cos_sim(prompt_embedding, question_embeddings)
+    max_sim, index = torch.max(cos_sim, dim=1)
+
+    if len(questions) > 0 and index.tolist()[0] < len(questions):
+        return questions[index.tolist()[0]], max_sim.tolist()[0]
     else:
         return None, 0
+
 
 async def get_more_context(question: str, answer: str, user_question: str, similarity: float) -> str:
     logger.info(f"Answer: {answer}")
@@ -66,18 +84,25 @@ async def get_more_context(question: str, answer: str, user_question: str, simil
 
     return response.choices[0].message['content'].strip()
 
-def main():
+async def process_question(user_question):
+    best_question, similarity = await find_best_question_match(user_question, qa_embeddings)
+    best_answer = qa_embeddings.get(best_question, {}).get('answer', "")
+    context_answer = await get_more_context(best_question, best_answer, user_question, similarity)
+    return context_answer
+
+async def main():
     print("Type your questions in Bulgarian. Type '.exit' to quit the program.")
+    
     while True:
         user_question = input("Your question: ")
         if user_question.strip() == ".exit":
             break
 
-        loop = asyncio.get_event_loop()
-        best_question, similarity = loop.run_until_complete(find_best_question_match(user_question, list(qa_embeddings.keys())))
-        best_answer = qa_embeddings.get(best_question, "")
-        context_answer = loop.run_until_complete(get_more_context(best_question, best_answer, user_question, similarity))
+        context_answer = await process_question(user_question)
         print(f"Assistant: {context_answer}")
+        print()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
+
+
