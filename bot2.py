@@ -7,6 +7,7 @@ import openai
 import torch
 from openai import ChatCompletion
 from sentence_transformers import SentenceTransformer, util
+import os
 
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
