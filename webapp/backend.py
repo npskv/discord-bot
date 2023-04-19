@@ -15,7 +15,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+model = SentenceTransformer('sentence-transformers/LaBSE')
+openai.api_key = os.environ.get("OPENAI_API_KEY")
+SIMILARITY_THRESHOLD = 0.75
 qa_embeddings = None
 
 def save_embeddings(embeddings: Dict, filename: str):
@@ -25,8 +27,20 @@ def save_embeddings(embeddings: Dict, filename: str):
 def load_embeddings(filename: str) -> Dict:
     with open(filename, 'rb') as file:
         return pickle.load(file)
+    
+async def precompute_embeddings():
+    print("Loading embeddings from file and precomputing tensors...")
+    with open('kb_simple.json', 'r') as file:
+        qa_data = json.load(file)
 
-qa_embeddings = None
+    qa_embeddings = {}
+    for question, answer in qa_data.items():
+        question_embedding = model.encode(question, convert_to_tensor=True)
+        qa_embeddings[question] = {
+            'answer': answer,
+            'embedding': question_embedding
+        }
+    return qa_embeddings
 
 def initialize_app():
     global qa_embeddings
@@ -56,26 +70,7 @@ def main():
 
 initialize_app()
 
-model = SentenceTransformer('sentence-transformers/LaBSE')
-openai.api_key = os.environ.get("OPENAI_API_KEY")
-
-SIMILARITY_THRESHOLD = 0.75
-
 app = Flask(__name__)
-
-async def precompute_embeddings():
-    print("Loading embeddings from file and precomputing tensors...")
-    with open('kb_simple.json', 'r') as file:
-        qa_data = json.load(file)
-
-    qa_embeddings = {}
-    for question, answer in qa_data.items():
-        question_embedding = model.encode(question, convert_to_tensor=True)
-        qa_embeddings[question] = {
-            'answer': answer,
-            'embedding': question_embedding
-        }
-    return qa_embeddings
 
 async def find_best_question_match(prompt, embeddings):
     prompt_embedding = model.encode(prompt, convert_to_tensor=True)
@@ -97,7 +92,7 @@ async def get_more_context(question: str, answer: str, user_question: str, simil
     if question and answer and similarity >= SIMILARITY_THRESHOLD:
         chat_messages = [
             {"role": "system", "content": "You are a helpful assistant. Please respond only in Bulgarian"},
-            {"role": "user", "content": f"Question: {question}\nAnswer: {answer}\n\nПредстави повече контекст към въпроса като включиш в отговора и линка от отговора"}
+            {"role": "user", "content": f"Question: {question}\nAnswer: {answer}\n\nПредстави повече контекст към въпроса като включиш в отговора и линка от отговора."}
         ]
     else:
         chat_messages = [

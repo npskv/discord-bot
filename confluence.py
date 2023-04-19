@@ -20,7 +20,7 @@ def strip_non_alpha_numeric(text):
 # Define a function to get all the titles, their links, and content in Confluence
 def get_all_titles_links_and_content(base_url, username, password):
     start = 0
-    limit = 50
+    limit = 500
     all_titles_links_and_content = {}
 
     while True:
@@ -36,13 +36,14 @@ def get_all_titles_links_and_content(base_url, username, password):
 
             for result in results:
                 title = result.get("title")
-                link = f"{base_url}{result['_links']['webui']}"
+               # link = f"{base_url}{result['_links']['webui']}"
                 storage_format_content = result['body']['storage']['value']
                 soup = BeautifulSoup(storage_format_content, 'html.parser')
                 plain_text_content = soup.get_text(separator=" ")
                 stripped_content = strip_non_alpha_numeric(plain_text_content)
-                answer = f"{title} - {link}"
-                all_titles_links_and_content[stripped_content] = answer
+
+                questions = f"{title}" 
+                all_titles_links_and_content[questions] = stripped_content
 
             start += limit
 
