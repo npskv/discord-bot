@@ -89,16 +89,12 @@ async def find_best_question_match(prompt, embeddings):
 
 async def get_more_context(question: str, answer: str, user_question: str, similarity: float) -> str:
    
-    if question and answer and similarity >= SIMILARITY_THRESHOLD:
-        chat_messages = [
-            {"role": "system", "content": "You are a helpful assistant. Please respond only in Bulgarian"},
-            {"role": "user", "content": f"Question: {question}\nAnswer: {answer}\n\nПредстави повече контекст към въпроса като включиш в отговора и линка от отговора."}
-        ]
-    else:
-        chat_messages = [
-            {"role": "system", "content": "You are a funny chatbot. Please respond only in Bulgarian"},
-            {"role": "user", "content": user_question}
-        ]
+    chat_messages = [
+        {"role": "system", "content": "You are an support assistant for company Centio #CYBERSECURITY. You use a tone that is technical and scientific. You answer only in Bulgarian language. You answer only questions related to products of ESET and Sophos."},
+        {"role": "user", "content": f"{user_question}"},
+        {"role": "assistant", "content": f"{answer}"}
+    ]
+
 
     response = ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -106,9 +102,15 @@ async def get_more_context(question: str, answer: str, user_question: str, simil
         max_tokens=500,
         n=1,
         stop=None,
-        temperature=0.5,
+        temperature=0,
     )
 
+    print("Въпрос от клиент:",user_question)
+    print("Отговор от базата:",answer)
+    print("Сходство:",similarity)
+    print("Prompt:",chat_messages)
+    print("Отговор от OpenAI:",response.choices[0].message['content'])
+    
     return response.choices[0].message['content'].strip()
 
 async def process_question(user_question):
